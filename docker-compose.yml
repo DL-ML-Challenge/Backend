@@ -1,0 +1,28 @@
+version: "3"
+
+volumes:
+  db-postgres:
+
+services:
+  db-postgres:
+    image: postgres
+    environment:
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - db-postgres:/var/lib/postgresql/ai/data
+    expose:
+      - "5432"
+  back:
+    restart: on-failure
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+#    command: python manage.py runserver 0.0.0.0:8000
+    links:
+      - db-postgres
+    volumes:
+      - ./:/app/
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
