@@ -25,9 +25,8 @@ def register(request):
 
 @api_view(['POST'])
 def login(request):
-    stn_or_email = request.data.get('id')
-    print(f'agbr {stn_or_email}')
-    national_id = request.data.get('notional_id')
+    stn_or_email = request.data.get('id') or ''
+    national_id = request.data.get('national_id') or ''
     if re.match(r"[^@]+@[^@]+\.[^@]+", stn_or_email):
         user = AIUser.objects.filter(email=stn_or_email, national_id=national_id).first()
     elif re.match(r"^[0-9]*$", stn_or_email):
