@@ -11,13 +11,8 @@ from groups.serializers import ChallengeUserSerializer, ChallengeGroupSerializer
 # Create your views here.
 
 class ChallengeUserAPIView(APIView):
-
-    def get(self, request, student_code):
-        try:
-            user = ChallengeUser.objects.get(student_code=student_code)
-        except ChallengeUser.DoesNotExist:
-            raise Http404
-        serializer = ChallengeUserSerializer(user)
+    def get(self, request):
+        serializer = ChallengeUserSerializer(self.request.user.challenge_user)
         return Response(serializer.data)
 
 

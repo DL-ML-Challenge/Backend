@@ -4,7 +4,7 @@ from groups.models import ChallengeUser, ChallengeGroup
 
 
 class ChallengeUserSerializer(serializers.ModelSerializer):
-    group_name = serializers.RelatedField(source='group.name', read_only=True)
+    group_name = serializers.CharField(source='group.name', read_only=True)
 
     class Meta:
         model = ChallengeUser
