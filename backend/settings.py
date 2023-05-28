@@ -139,3 +139,9 @@ CORS_ALLOW_ALL_ORIGINS = True
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000"
 ]
+
+DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+AWS_ACCESS_KEY_ID = 'abcdefg'
+AWS_SECRET_ACCESS_KEY = 'secretsecretsecret'
+AWS_STORAGE_BUCKET_NAME = 'submission'
+AWS_S3_ENDPOINT_URL = 'http://localhost:9000'  # Assuming you'll use 'minio' as the Docker service name
