@@ -1,3 +1,4 @@
+import random
 from functools import cached_property
 
 from django.conf import settings
@@ -14,6 +15,9 @@ from challenge.serializers import (
     ChallengeSerializer, ChallengePhaseSerializer, GroupSubmitSerializer,
 )
 from groups.models import ChallengeGroup
+
+from minio import Minio
+import pika
 
 
 # Create your views here.
@@ -106,12 +110,40 @@ class GroupSubmitAPIView(APIView):
         except (ChallengePhase.DoesNotExist, ChallengeGroup.DoesNotExist):
             raise Http404
         up_file = request.FILES['file']
-        destination = open(settings.MEDIA_ROOT + '/' + up_file.name, 'wb+')
+        rand = random.randint(1, 1000000)
+        destination = open(f'{settings.MEDIA_ROOT}/{self.request.user.challenge_user.student_code}-{rand}.{format}',
+                           'wb+')
         for chunk in up_file.chunks():
             destination.write(chunk)
         destination.close()
-        # TODO: judge the uploaded file
-        submit = GroupSubmit(phase=phase, group=group, score=100).save()
+        submit = GroupSubmit(phase=phase, group=group, score=-1).save()
+        client = Minio(
+            settings.MINIO_ENDPOINT,
+            access_key=settings.MINIO_ACCESS_KEY,
+            secret_key=settings.MINIO_SECRET_KEY,
+            secure=False
+        )
+        if not client.bucket_exists("submit"):
+            client.make_bucket("submit")
+        client.fput_object(
+            "submit", f'{self.request.user.challenge_user.student_code}/{submit.id}.{format}',
+            f'{settings.MEDIA_ROOT}/{self.request.user.challenge_user.student_code}-{rand}.{format}'
+        )
+        credentials = pika.PlainCredentials(settings.RABBITMQ_USERNAME, settings.RABBITMQ_PASSWORD)
+        parameters = pika.ConnectionParameters(settings.RABBITMQ_ENDPOINT, 5672, '/', credentials)
+        connection = pika.BlockingConnection(parameters)
+        channel = connection.channel()
+        channel.exchange_declare('challenge', exchange_type='fanout')
+        channel.queue_declare(queue='submit')
+        channel.queue_bind(exchange='challenge', queue='submit')
+        channel.basic_publish(exchange='challenge',
+                              routing_key='',
+                              body=str({
+                                  'tag': phase.tag,
+                                  'student_number': self.request.user.challenge_user.student_code,
+                                  'file_id': submit.id,
+                              }))
+        channel.close()
         return Response(GroupSubmitSerializer(submit), status.HTTP_201_CREATED)
 
 
@@ -125,3 +157,17 @@ class ScoreboardAPIView(APIView):
             '-best_score'
         )
         return Response(GroupSubmitSerializer(submits, many=True), status.HTTP_200_OK)
+
+
+class ScoreSubmitAPIView(APIView):
+
+    def post(self, request, student_code, file_id):
+        try:
+            submit = GroupSubmit.objects.get(pk=file_id)
+        except GroupSubmit.DoesNotExist:
+            raise Http404
+        if not submit.group.challengeuser_set.objects.filter(student_code=student_code).exists():
+            return Response(status=status.HTTP_401_UNAUTHORIZED)
+        submit.score = request.POST.get('score', -1)
+        submit.save()
+        return Response(GroupSubmitSerializer(submit), status.HTTP_200_OK)

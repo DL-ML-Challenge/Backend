@@ -18,7 +18,7 @@ class ChallengePhaseSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ChallengePhase
-        fields = ['id', 'name']
+        fields = ['id', 'name', 'tag']
 
 
 class ChallengeSerializer(serializers.ModelSerializer):
