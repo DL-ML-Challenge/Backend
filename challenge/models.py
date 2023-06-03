@@ -1,3 +1,6 @@
+import random
+import string
+
 from django.db import models
 from groups.models import ChallengeGroup, ChallengeUser
 
@@ -19,10 +22,21 @@ class GroupParticipation(models.Model):
     group = models.ForeignKey(ChallengeGroup, on_delete=models.CASCADE)
 
 
+def random_string(length=8):
+    return "".join(random.choice(string.ascii_lowercase) for _ in range(length))
+
+
+def get_submit_file_name(instance, filename):
+    return f"{instance.student_code}/{filename}-{random_string()}.zip"
+
+
 class GroupSubmit(models.Model):
     phase = models.ForeignKey(ChallengePhase, on_delete=models.CASCADE)
     group = models.ForeignKey(ChallengeGroup, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
-    user = models.ForeignKey(ChallengeUser, null=True, on_delete=models.SET_NULL)
-    file = models.FileField()
+    file = models.FileField(upload_to=get_submit_file_name)
     score = models.DecimalField(max_digits=50, decimal_places=20, null=True, blank=True)
+
+    @property
+    def student_code(self):
+        return self.group.challengeuser_set.first().student_code

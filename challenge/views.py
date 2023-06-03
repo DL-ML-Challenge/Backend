@@ -17,7 +17,6 @@ from challenge.serializers import (
 )
 from groups.models import ChallengeGroup
 
-from minio import Minio
 import pika
 
 
@@ -88,7 +87,24 @@ class ListCreateGroupSubmitAPIView(ListCreateAPIView):
         ).order_by("-id")
 
     def perform_create(self, serializer):
-        serializer.save(phase=self.phase, group_id=self.request.user.challenge_user.group_id)
+        submit = serializer.save(phase=self.phase, group_id=self.request.user.challenge_user.group_id, score=-1)
+        credentials = pika.PlainCredentials(settings.RABBITMQ_USERNAME, settings.RABBITMQ_PASSWORD)
+        parameters = pika.ConnectionParameters(settings.RABBITMQ_ENDPOINT, 5672, '/', credentials)
+        with pika.BlockingConnection(parameters) as connection, connection.channel() as channel:
+            channel.exchange_declare('challenge', exchange_type='fanout')
+            channel.queue_declare(queue='submit')
+            channel.queue_bind(exchange='challenge', queue='submit')
+            channel.basic_publish(
+                exchange='challenge',
+                routing_key='',
+                body=json.dumps(
+                    {
+                        'tag': self.phase.tag,
+                        'student_number': submit.file.name.split("/")[0],
+                        'file_id': submit.file.name.split("/")[1].split(".zip")[0],
+                    }
+                ).encode(),
+            )
 
 
 class GroupSubmitAPIView(APIView):
