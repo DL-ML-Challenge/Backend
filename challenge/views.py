@@ -161,6 +161,15 @@ class ScoreboardAPIView(APIView):
 
 class ScoreSubmitAPIView(APIView):
 
+    def get(self, request, student_code, file_id):
+        try:
+            submit = GroupSubmit.objects.get(pk=file_id)
+        except GroupSubmit.DoesNotExist:
+            raise Http404
+        if not submit.group.challengeuser_set.objects.filter(student_code=student_code).exists():
+            return Response(status=status.HTTP_401_UNAUTHORIZED)
+        return Response(f'{submit.score != -1}', status.HTTP_200_OK)
+
     def post(self, request, student_code, file_id):
         try:
             submit = GroupSubmit.objects.get(pk=file_id)
