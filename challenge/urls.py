@@ -9,5 +9,5 @@ urlpatterns = [
     path('submit/<int:phase>/<int:group>/', views.GroupSubmitAPIView.as_view()),
     path('submit/<int:phase>/scoreboard', views.ScoreboardAPIView.as_view()),
     path('submit/<int:student_code>/<int:file_id>/score', views.ScoreSubmitAPIView.as_view()),
-    path('submit/<int:student_code>/<int:file_id>/score', views.ScoreSubmitAPIView.as_view()),
+    path('submit/<int:phase>/<int:group>/rejudge', views.RejudgeAPIView.as_view()),
 ]

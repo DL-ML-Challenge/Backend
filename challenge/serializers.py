@@ -31,8 +31,9 @@ class ChallengeSerializer(serializers.ModelSerializer):
 
 class GroupSubmitSerializer(serializers.ModelSerializer):
     group_name = serializers.RelatedField(source='group.name', read_only=True)
+    user_name = serializers.RelatedField(source='user.full_name', read_only=True)
     phase_challenge_name = serializers.RelatedField(source='phase.challenge.name', read_only=True)
 
     class Meta:
         model = GroupSubmit
-        fields = ['id', 'group_name', 'phase_challenge_name', 'score']
+        fields = ['id', 'group_name', 'user_name', 'phase_challenge_name', 'score']

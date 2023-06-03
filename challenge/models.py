@@ -1,5 +1,5 @@
 from django.db import models
-from groups.models import ChallengeGroup
+from groups.models import ChallengeGroup, ChallengeUser
 
 
 # Create your models here.
@@ -23,5 +23,6 @@ class GroupSubmit(models.Model):
     phase = models.ForeignKey(ChallengePhase, on_delete=models.CASCADE)
     group = models.ForeignKey(ChallengeGroup, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
+    user = models.ForeignKey(ChallengeUser, null=True, on_delete=models.SET_NULL)
     file = models.FileField()
     score = models.DecimalField(max_digits=50, decimal_places=20, null=True, blank=True)

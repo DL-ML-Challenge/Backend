@@ -1,3 +1,4 @@
+import json
 import random
 from functools import cached_property
 
@@ -116,7 +117,8 @@ class GroupSubmitAPIView(APIView):
         for chunk in up_file.chunks():
             destination.write(chunk)
         destination.close()
-        submit = GroupSubmit(phase=phase, group=group, score=-1).save()
+        submit = GroupSubmit(phase=phase, group=group, user=self.request.user.challenge_user, score=-1)
+        submit.save()
         client = Minio(
             settings.MINIO_ENDPOINT,
             access_key=settings.MINIO_ACCESS_KEY,
@@ -138,7 +140,7 @@ class GroupSubmitAPIView(APIView):
         channel.queue_bind(exchange='challenge', queue='submit')
         channel.basic_publish(exchange='challenge',
                               routing_key='',
-                              body=str({
+                              body=json.dumps({
                                   'tag': phase.tag,
                                   'student_number': self.request.user.challenge_user.student_code,
                                   'file_id': submit.id,
@@ -180,3 +182,30 @@ class ScoreSubmitAPIView(APIView):
         submit.score = request.POST.get('score', -1)
         submit.save()
         return Response(GroupSubmitSerializer(submit), status.HTTP_200_OK)
+
+
+class RejudgeAPIView(APIView):
+    def get(self, request, phase, group):
+        try:
+            phase = ChallengePhase.objects.get(pk=phase)
+            group = ChallengeGroup.objects.get(pk=group)
+        except (ChallengePhase.DoesNotExist, ChallengeGroup.DoesNotExist):
+            raise Http404
+        submits = GroupSubmit.objects.filter(group=group, phase=phase).order_by('-created_at')[:10]
+        credentials = pika.PlainCredentials(settings.RABBITMQ_USERNAME, settings.RABBITMQ_PASSWORD)
+        parameters = pika.ConnectionParameters(settings.RABBITMQ_ENDPOINT, 5672, '/', credentials)
+        connection = pika.BlockingConnection(parameters)
+        channel = connection.channel()
+        channel.exchange_declare('challenge', exchange_type='fanout')
+        channel.queue_declare(queue='submit')
+        channel.queue_bind(exchange='challenge', queue='submit')
+        for submit in submits:
+            channel.basic_publish(exchange='challenge',
+                                  routing_key='',
+                                  body=json.dumps({
+                                      'tag': phase.tag,
+                                      'student_number': submit.user.student_code,
+                                      'file_id': submit.id,
+                                  }))
+        channel.close()
+        return Response(GroupSubmitSerializer(submits, many=True), status.HTTP_200_OK)
