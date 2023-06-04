@@ -3,11 +3,12 @@ import random
 from functools import cached_property
 
 from django.conf import settings
-from django.db.models import Max
+from django.db.models import Max, Subquery, OuterRef, DecimalField
 from django.http import Http404
 from rest_framework import generics, mixins, status, serializers
-from rest_framework.generics import ListCreateAPIView, get_object_or_404
+from rest_framework.generics import ListCreateAPIView, get_object_or_404, ListAPIView
 from rest_framework.parsers import FileUploadParser
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -99,12 +100,48 @@ class ListCreateGroupSubmitAPIView(ListCreateAPIView):
                 routing_key='',
                 body=json.dumps(
                     {
+                        'phase': self.phase.name,
                         'tag': self.phase.tag,
-                        'student_number': submit.file.name.split("/")[0],
-                        'file_id': submit.file.name.split("/")[1].split(".zip")[0],
+                        'student_number': self.request.user.challenge_user.student_code,
+                        'file_id': submit.id,
                     }
-                ).encode(),
+                ).encode()
             )
+
+
+class RankingAPIView(ListAPIView):
+    class RankingGroupSerializer(serializers.ModelSerializer):
+        best_score = serializers.DecimalField(max_digits=50, decimal_places=20)
+
+        class Meta:
+            model = ChallengeGroup
+            fields = [
+                "best_score",
+                "name",
+            ]
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = RankingGroupSerializer
+
+    @cached_property
+    def phase(self):
+        return get_object_or_404(
+            ChallengePhase,
+            name=self.kwargs["phase_name"],
+            challenge__name=self.kwargs["challenge_name"],
+        )
+
+    def get_queryset(self):
+        return ChallengeGroup.objects.annotate(
+            best_score=Subquery(
+                GroupSubmit.objects.filter(
+                    phase=self.phase,
+                    group_id=OuterRef("id"),
+                    score__isnull=False,
+                ).exclude(score=-1).order_by("-score").values("score")[:1],
+                output_field=DecimalField(max_digits=50, decimal_places=20)
+            ),
+        ).filter(best_score__isnull=False).order_by("-best_score")
 
 
 class GroupSubmitAPIView(APIView):
@@ -128,8 +165,10 @@ class GroupSubmitAPIView(APIView):
             raise Http404
         up_file = request.FILES['file']
         rand = random.randint(1, 1000000)
-        destination = open(f'{settings.MEDIA_ROOT}/{self.request.user.challenge_user.student_code}-{rand}.{format}',
-                           'wb+')
+        destination = open(
+            f'{settings.MEDIA_ROOT}/{self.request.user.challenge_user.student_code}-{rand}.{format}',
+            'wb+'
+        )
         for chunk in up_file.chunks():
             destination.write(chunk)
         destination.close()
@@ -154,14 +193,18 @@ class GroupSubmitAPIView(APIView):
         channel.exchange_declare('challenge', exchange_type='fanout')
         channel.queue_declare(queue='submit')
         channel.queue_bind(exchange='challenge', queue='submit')
-        channel.basic_publish(exchange='challenge',
-                              routing_key='',
-                              body=json.dumps({
-                                  'phase': phase.name,
-                                  'tag': phase.tag,
-                                  'student_number': self.request.user.challenge_user.student_code,
-                                  'file_id': submit.id,
-                              }))
+        channel.basic_publish(
+            exchange='challenge',
+            routing_key='',
+            body=json.dumps(
+                {
+                    'phase': phase.name,
+                    'tag': phase.tag,
+                    'student_number': self.request.user.challenge_user.student_code,
+                    'file_id': submit.id,
+                }
+            )
+        )
         channel.close()
         return Response(GroupSubmitSerializer(submit), status.HTTP_201_CREATED)
 
@@ -217,13 +260,17 @@ class RejudgeAPIView(APIView):
         channel.queue_declare(queue='submit')
         channel.queue_bind(exchange='challenge', queue='submit')
         for submit in submits:
-            channel.basic_publish(exchange='challenge',
-                                  routing_key='',
-                                  body=json.dumps({
-                                      'phase': phase.name,
-                                      'tag': phase.tag,
-                                      'student_number': submit.user.student_code,
-                                      'file_id': submit.id,
-                                  }))
+            channel.basic_publish(
+                exchange='challenge',
+                routing_key='',
+                body=json.dumps(
+                    {
+                        'phase': phase.name,
+                        'tag': phase.tag,
+                        'student_number': submit.user.student_code,
+                        'file_id': submit.id,
+                    }
+                )
+            )
         channel.close()
         return Response(GroupSubmitSerializer(submits, many=True), status.HTTP_200_OK)
