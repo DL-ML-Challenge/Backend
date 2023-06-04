@@ -157,6 +157,7 @@ class GroupSubmitAPIView(APIView):
         channel.basic_publish(exchange='challenge',
                               routing_key='',
                               body=json.dumps({
+                                  'phase': phase.name,
                                   'tag': phase.tag,
                                   'student_number': self.request.user.challenge_user.student_code,
                                   'file_id': submit.id,
@@ -219,6 +220,7 @@ class RejudgeAPIView(APIView):
             channel.basic_publish(exchange='challenge',
                                   routing_key='',
                                   body=json.dumps({
+                                      'phase': phase.name,
                                       'tag': phase.tag,
                                       'student_number': submit.user.student_code,
                                       'file_id': submit.id,
