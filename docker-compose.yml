@@ -12,3 +12,22 @@ services:
       - MINIO_ROOT_PASSWORD=secretsecretsecret
     volumes:
       - ./minio:/data
+  db-postgres:
+    image: postgres:11.10-alpine
+    environment:
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - /db-postgres:/var/lib/postgresql/ai/data
+    expose:
+      - "5432"
+  back:
+    restart: on-failure
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    links:
+      - db-postgres
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
