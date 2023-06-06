@@ -27,6 +27,7 @@ def random_string(length=8):
 
 
 def get_submit_file_name(instance, filename):
+    filename = filename.split(".")[0]
     return f"{instance.student_code}/{filename}-{random_string()}.zip"
 
 
