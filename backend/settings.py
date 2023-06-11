@@ -151,7 +151,8 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 CORS_ALLOW_ALL_ORIGINS = True
 CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:3000"
+    "http://localhost:3000",
+    "https://mlchallenge.ir",
 ]
 
 DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
