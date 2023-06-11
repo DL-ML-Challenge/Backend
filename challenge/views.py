@@ -12,7 +12,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from challenge.authentication import JudgeSecretAuthentication
 from challenge.models import Challenge, ChallengePhase, GroupSubmit
+from challenge.permission import IsJudge
 from challenge.serializers import (
     ChallengeSerializer, ChallengePhaseSerializer, GroupSubmitSerializer,
 )
@@ -64,11 +66,14 @@ class ListCreateGroupSubmitAPIView(ListCreateAPIView):
                 "file",
                 "score",
                 "created_at",
+                "is_judged",
+                "error",
             ]
             extra_kwargs = {
                 "file": {"write_only": True},
                 "score": {"read_only": True},
                 "created_at": {"read_only": True},
+                "error": {"read_only": True},
             }
 
     serializer_class = GroupSubmitSerializer
@@ -223,24 +228,23 @@ class ScoreboardAPIView(APIView):
 
 
 class ScoreSubmitAPIView(APIView):
+    authentication_classes = [JudgeSecretAuthentication]
+    permission_classes = [IsJudge]
 
     def get(self, request, student_code, file_id):
         try:
             submit = GroupSubmit.objects.get(pk=file_id)
         except GroupSubmit.DoesNotExist:
             raise Http404
-        if not submit.group.challengeuser_set.objects.filter(student_code=student_code).exists():
-            return Response(status=status.HTTP_401_UNAUTHORIZED)
-        return Response(f'{submit.score != -1}', status.HTTP_200_OK)
+        return Response({"is_judged": submit.is_judged}, status.HTTP_200_OK)
 
     def post(self, request, student_code, file_id):
         try:
             submit = GroupSubmit.objects.get(pk=file_id)
         except GroupSubmit.DoesNotExist:
             raise Http404
-        if not submit.group.challengeuser_set.objects.filter(student_code=student_code).exists():
-            return Response(status=status.HTTP_401_UNAUTHORIZED)
-        submit.score = request.POST.get('score', -1)
+        submit.score = request.data.get("score", -1)
+        submit.error = request.data.get("error", "")
         submit.save()
         return Response(GroupSubmitSerializer(submit), status.HTTP_200_OK)
 

@@ -38,7 +38,12 @@ class GroupSubmit(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     file = models.FileField(upload_to=get_submit_file_name)
     score = models.DecimalField(max_digits=50, decimal_places=20, null=True, blank=True)
+    error = models.TextField(blank=True)
 
     @property
     def student_code(self):
         return self.group.challengeuser_set.first().student_code
+
+    @property
+    def is_judged(self):
+        return len(self.error) > 0 or (self.score != -1 and self.score is not None)
