@@ -246,7 +246,7 @@ class ScoreSubmitAPIView(APIView):
         submit.score = request.data.get("score", -1)
         submit.error = request.data.get("error", "")
         submit.save()
-        return Response(GroupSubmitSerializer(submit), status.HTTP_200_OK)
+        return Response({}, status.HTTP_200_OK)
 
 
 class RejudgeAPIView(APIView):
