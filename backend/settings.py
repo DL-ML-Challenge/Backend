@@ -171,4 +171,4 @@ RABBITMQ_ENDPOINT = '213.233.184.100'
 RABBITMQ_USERNAME = 'rabbit'
 RABBITMQ_PASSWORD = '8e1eb3b4b5f60e0f5cc701713e714f47'
 
-JUDGE_SECRET = os.getenv("SCORE_SECRET", "not-so-secret")
+JUDGE_SECRET = os.getenv("JUDGE_SECRET", "not-so-secret")
