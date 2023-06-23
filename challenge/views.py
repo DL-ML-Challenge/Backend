@@ -94,6 +94,8 @@ class ListCreateGroupSubmitAPIView(ListCreateAPIView):
 
     def perform_create(self, serializer):
         submit = serializer.save(phase=self.phase, group_id=self.request.user.challenge_user.group_id, score=-1)
+        if self.phase.challenge.name == "ml":
+            return
         credentials = pika.PlainCredentials(settings.RABBITMQ_USERNAME, settings.RABBITMQ_PASSWORD)
         parameters = pika.ConnectionParameters(settings.RABBITMQ_ENDPOINT, 5672, '/', credentials)
         with pika.BlockingConnection(parameters) as connection, connection.channel() as channel:
