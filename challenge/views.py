@@ -18,7 +18,7 @@ from challenge.permission import IsJudge
 from challenge.serializers import (
     ChallengeSerializer, ChallengePhaseSerializer, GroupSubmitSerializer,
 )
-from groups.models import ChallengeGroup
+from groups.models import ChallengeGroup, ChallengeUser
 
 import pika
 
@@ -115,15 +115,26 @@ class ListCreateGroupSubmitAPIView(ListCreateAPIView):
             )
 
 
+class RankingGroupUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChallengeUser
+        fields = [
+            "full_name",
+        ]
+
+
 class RankingAPIView(ListAPIView):
+
     class RankingGroupSerializer(serializers.ModelSerializer):
         best_score = serializers.DecimalField(max_digits=50, decimal_places=20)
+        users = RankingGroupUserSerializer(source="challengeuser_set", many=True)
 
         class Meta:
             model = ChallengeGroup
             fields = [
                 "best_score",
                 "name",
+                "users",
             ]
 
     permission_classes = [IsAuthenticated]
