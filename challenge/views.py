@@ -107,7 +107,7 @@ class ListCreateGroupSubmitAPIView(ListCreateAPIView):
                     {
                         'phase': self.phase.name,
                         'tag': self.phase.tag,
-                        'student_number': self.request.user.challenge_user.student_code,
+                        'student_number': submit.student_code,
                         'file_id': submit.id,
                         'file_name': submit.file.name.rsplit(".", 1)[0].split("/", 1)[1],
                     }
