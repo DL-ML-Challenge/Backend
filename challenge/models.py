@@ -27,9 +27,12 @@ def random_string(length=8):
 
 
 def get_submit_file_name(instance, filename):
-    filename = filename.split(".")[0]
+    if filename and not filename.endswith(".zip") and "." in filename:
+        extension = filename.rsplit(".", 1)[-1]
+    else:
+        extension = "zip"
     # return f"{instance.student_code}/{filename}-{random_string()}.zip"
-    return f"{instance.student_code}/{random_string()}.zip"
+    return f"{instance.student_code}/{random_string()}.{extension}"
 
 
 class GroupSubmit(models.Model):
