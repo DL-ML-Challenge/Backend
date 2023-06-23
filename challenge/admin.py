@@ -16,6 +16,12 @@ class MLSubmissionAdmin(admin.ModelAdmin):
     list_display = ["id", "group", "score"]
     actions_on_top = []
 
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_add_permission(self, request):
+        return False
+
     def get_queryset(self, request):
         return MLSubmission.objects.all().filter(phase__challenge__name="ml")
 
