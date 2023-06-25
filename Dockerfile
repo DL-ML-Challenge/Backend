@@ -6,4 +6,4 @@ index-url = https://pypi.iranrepo.ir/simple" > /etc/pip.conf
 RUN pip install -r ./requirements.txt
 ADD ./ ./
 ENV PYTHONUNBUFFERED=1
-ENTRYPOINT ["/bin/sh", "-c" , "python manage.py collectstatic --noinput && python manage.py migrate && gunicorn --bind 0.0.0.0:8000 backend.wsgi --timeout 1200 --workers 4"]
+ENTRYPOINT ["/bin/sh", "-c" , "python manage.py collectstatic --noinput && python manage.py migrate && gunicorn --bind 0.0.0.0:8000 backend.wsgi --timeout 1200 --workers 8"]
