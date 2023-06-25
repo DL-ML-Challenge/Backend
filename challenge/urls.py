@@ -5,7 +5,7 @@ urlpatterns = [
     path('challenge/', views.ChallengeListAPIView.as_view()),
     path('challenge/<int:pk>/', views.ChallengeDetailAPIView.as_view()),
     path('phase/<int:pk>/', views.ChallengePhaseAPIView.as_view()),
-    # path('<str:challenge_name>/<str:phase_name>/submit/', views.ListCreateGroupSubmitAPIView.as_view()),
+    path('<str:challenge_name>/<str:phase_name>/submit/', views.ListCreateGroupSubmitAPIView.as_view()),
     # path('<str:challenge_name>/<str:phase_name>/submit-drive/', views.CreateGoogleDriveGroupSubmitAPIView.as_view()),
     path('<str:challenge_name>/<int:phase_name>/ranking/', views.RankingAPIView.as_view()),
     path('submit/<int:phase>/<int:group>/', views.GroupSubmitAPIView.as_view()),
