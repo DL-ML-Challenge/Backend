@@ -2,7 +2,8 @@ import random
 import string
 
 from django.db import models
-from groups.models import ChallengeGroup, ChallengeUser
+
+from groups.models import ChallengeGroup
 
 
 # Create your models here.
@@ -14,11 +15,6 @@ class Challenge(models.Model):
 class ChallengePhase(models.Model):
     name = models.CharField(max_length=50)
     challenge = models.ForeignKey(Challenge, on_delete=models.CASCADE)
-
-
-class GroupParticipation(models.Model):
-    phase = models.ForeignKey(ChallengePhase, on_delete=models.CASCADE)
-    group = models.ForeignKey(ChallengeGroup, on_delete=models.CASCADE)
 
 
 def random_string(length=8):
