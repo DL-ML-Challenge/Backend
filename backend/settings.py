@@ -172,3 +172,20 @@ RABBITMQ_USERNAME = 'rabbit'
 RABBITMQ_PASSWORD = '8e1eb3b4b5f60e0f5cc701713e714f47'
 
 JUDGE_SECRET = os.getenv("JUDGE_SECRET", "not-so-secret")
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+    },
+}
