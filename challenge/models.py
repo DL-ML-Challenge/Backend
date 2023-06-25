@@ -14,7 +14,6 @@ class Challenge(models.Model):
 class ChallengePhase(models.Model):
     name = models.CharField(max_length=50)
     challenge = models.ForeignKey(Challenge, on_delete=models.CASCADE)
-    tag = models.CharField(max_length=20, default='vision')
 
 
 class GroupParticipation(models.Model):

@@ -22,7 +22,7 @@ def send_submit_to_judge(submit: GroupSubmit):
             body=json.dumps(
                 {
                     'phase': submit.phase.name,
-                    'tag': submit.phase.tag,
+                    'tag': submit.phase.challenge.name,
                     'student_number': submit.student_code,
                     'file_id': submit.id,
                     'file_name': submit.file.name.rsplit(".", 1)[0].split("/", 1)[1],
