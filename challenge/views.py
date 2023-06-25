@@ -1,17 +1,20 @@
 import json
 import random
+import tempfile
 from functools import cached_property
 
 from django.conf import settings
+from django.core.exceptions import BadRequest
 from django.db.models import Max, Subquery, OuterRef, DecimalField
 from django.http import Http404
 from rest_framework import generics, mixins, status, serializers
-from rest_framework.generics import ListCreateAPIView, get_object_or_404, ListAPIView
+from rest_framework.generics import ListCreateAPIView, get_object_or_404, ListAPIView, RetrieveAPIView
 from rest_framework.parsers import FileUploadParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from challenge import services
 from challenge.authentication import JudgeSecretAuthentication
 from challenge.models import Challenge, ChallengePhase, GroupSubmit
 from challenge.permission import IsJudge
@@ -94,27 +97,49 @@ class ListCreateGroupSubmitAPIView(ListCreateAPIView):
 
     def perform_create(self, serializer):
         submit = serializer.save(phase=self.phase, group_id=self.request.user.challenge_user.group_id, score=-1)
-        if self.phase.challenge.name == "ml":
-            return
-        credentials = pika.PlainCredentials(settings.RABBITMQ_USERNAME, settings.RABBITMQ_PASSWORD)
-        parameters = pika.ConnectionParameters(settings.RABBITMQ_ENDPOINT, 5672, '/', credentials)
-        with pika.BlockingConnection(parameters) as connection, connection.channel() as channel:
-            channel.exchange_declare('challenge', exchange_type='fanout')
-            channel.queue_declare(queue='submit')
-            channel.queue_bind(exchange='challenge', queue='submit')
-            channel.basic_publish(
-                exchange='challenge',
-                routing_key='',
-                body=json.dumps(
-                    {
-                        'phase': self.phase.name,
-                        'tag': self.phase.tag,
-                        'student_number': submit.student_code,
-                        'file_id': submit.id,
-                        'file_name': submit.file.name.rsplit(".", 1)[0].split("/", 1)[1],
-                    }
-                ).encode()
+        services.send_submit_to_judge(submit)
+
+
+class CreateGoogleDriveGroupSubmitAPIView(ListCreateAPIView):
+    class GroupSubmitSerializer(serializers.ModelSerializer):
+        url = serializers.URLField()
+
+        class Meta:
+            model = GroupSubmit
+            fields = [
+                "url",
+            ]
+
+    serializer_class = GroupSubmitSerializer
+
+    @cached_property
+    def phase(self):
+        return get_object_or_404(
+            ChallengePhase,
+            name=self.kwargs["phase_name"],
+            challenge__name=self.kwargs["challenge_name"],
+        )
+
+    def get_queryset(self):
+        return GroupSubmit.objects.filter(
+            group_id=self.request.user.challenge_user.group_id,
+            phase=self.phase
+        ).order_by("-id")
+
+    def perform_create(self, serializer):
+        with tempfile.NamedTemporaryFile() as tmp_file:
+            downloaded = services.download_from_drive(tmp_file.name, url=serializer.validated_data["url"])
+            if not downloaded:
+                raise BadRequest("Could not download from this link")
+            submit = GroupSubmit.objects.create(
+                phase=self.phase,
+                group_id=self.request.user.challenge_user.group_id,
+                score=-1,
             )
+            with open(tmp_file.name, "rb") as f:
+                submit.file.save("a.zip" if self.phase.challenge.name != "ml" else "a.ipynb", f, save=False)
+            submit.save()
+        services.send_submit_to_judge(submit)
 
 
 class RankingGroupUserSerializer(serializers.ModelSerializer):
@@ -126,7 +151,6 @@ class RankingGroupUserSerializer(serializers.ModelSerializer):
 
 
 class RankingAPIView(ListAPIView):
-
     class RankingGroupSerializer(serializers.ModelSerializer):
         best_score = serializers.DecimalField(max_digits=50, decimal_places=20)
         users = RankingGroupUserSerializer(source="challengeuser_set", many=True)
