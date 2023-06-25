@@ -1,64 +1,20 @@
-import json
-import random
 import tempfile
 from functools import cached_property
 
-from django.conf import settings
 from django.core.exceptions import BadRequest
-from django.db.models import Max, Subquery, OuterRef, DecimalField
+from django.db.models import Subquery, OuterRef, DecimalField
 from django.http import Http404
-from rest_framework import generics, mixins, status, serializers
-from rest_framework.generics import ListCreateAPIView, get_object_or_404, ListAPIView, RetrieveAPIView
-from rest_framework.parsers import FileUploadParser
+from rest_framework import status, serializers
+from rest_framework.generics import ListCreateAPIView, get_object_or_404, ListAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from challenge import services
 from challenge.authentication import JudgeSecretAuthentication
-from challenge.models import Challenge, ChallengePhase, GroupSubmit
+from challenge.models import ChallengePhase, GroupSubmit
 from challenge.permission import IsJudge
-from challenge.serializers import (
-    ChallengeSerializer, ChallengePhaseSerializer, GroupSubmitSerializer,
-)
 from groups.models import ChallengeGroup, ChallengeUser
-
-import pika
-
-
-# Create your views here.
-
-class ChallengeDetailAPIView(
-    mixins.RetrieveModelMixin,
-    generics.GenericAPIView
-):
-    queryset = Challenge.objects.all()
-    serializer_class = ChallengeSerializer
-
-    def get(self, request, *args, **kwargs):
-        return self.retrieve(request, *args, **kwargs)
-
-
-class ChallengeListAPIView(
-    mixins.ListModelMixin,
-    generics.GenericAPIView
-):
-    queryset = Challenge.objects.all()
-    serializer_class = ChallengeSerializer
-
-    def get(self, request, *args, **kwargs):
-        return self.list(request, *args, **kwargs)
-
-
-class ChallengePhaseAPIView(
-    mixins.RetrieveModelMixin,
-    generics.GenericAPIView
-):
-    queryset = ChallengePhase.objects.all()
-    serializer_class = ChallengePhaseSerializer
-
-    def get(self, request, *args, **kwargs):
-        return self.retrieve(request, *args, **kwargs)
 
 
 class ListCreateGroupSubmitAPIView(ListCreateAPIView):
@@ -187,83 +143,6 @@ class RankingAPIView(ListAPIView):
         ).filter(best_score__isnull=False).order_by("-best_score")
 
 
-class GroupSubmitAPIView(APIView):
-    parser_classes = (FileUploadParser,)
-
-    def get(self, request, phase, group):
-        try:
-            phase = ChallengePhase.objects.get(pk=phase)
-            group = ChallengeGroup.objects.get(pk=group)
-        except (ChallengePhase.DoesNotExist, ChallengeGroup.DoesNotExist):
-            raise Http404
-        submits = GroupSubmit.objects.filter(group=group, phase=phase)
-        serializer = GroupSubmitSerializer(submits, many=True)
-        return Response(serializer.data)
-
-    def post(self, request, phase, group, format='zip'):
-        try:
-            phase = ChallengePhase.objects.get(pk=phase)
-            group = ChallengeGroup.objects.get(pk=group)
-        except (ChallengePhase.DoesNotExist, ChallengeGroup.DoesNotExist):
-            raise Http404
-        up_file = request.FILES['file']
-        rand = random.randint(1, 1000000)
-        destination = open(
-            f'{settings.MEDIA_ROOT}/{self.request.user.challenge_user.student_code}-{rand}.{format}',
-            'wb+'
-        )
-        for chunk in up_file.chunks():
-            destination.write(chunk)
-        destination.close()
-        submit = GroupSubmit(phase=phase, group=group, user=self.request.user.challenge_user, score=-1)
-        submit.save()
-        client = Minio(
-            settings.MINIO_ENDPOINT,
-            access_key=settings.MINIO_ACCESS_KEY,
-            secret_key=settings.MINIO_SECRET_KEY,
-            secure=False
-        )
-        if not client.bucket_exists("submit"):
-            client.make_bucket("submit")
-        client.fput_object(
-            "submit", f'{self.request.user.challenge_user.student_code}/{submit.id}.{format}',
-            f'{settings.MEDIA_ROOT}/{self.request.user.challenge_user.student_code}-{rand}.{format}'
-        )
-        credentials = pika.PlainCredentials(settings.RABBITMQ_USERNAME, settings.RABBITMQ_PASSWORD)
-        parameters = pika.ConnectionParameters(settings.RABBITMQ_ENDPOINT, 5672, '/', credentials)
-        connection = pika.BlockingConnection(parameters)
-        channel = connection.channel()
-        channel.exchange_declare('challenge', exchange_type='fanout')
-        channel.queue_declare(queue='submit')
-        channel.queue_bind(exchange='challenge', queue='submit')
-        channel.basic_publish(
-            exchange='challenge',
-            routing_key='',
-            body=json.dumps(
-                {
-                    'phase': phase.name,
-                    'tag': phase.tag,
-                    'student_number': self.request.user.challenge_user.student_code,
-                    'file_id': submit.id,
-                }
-            )
-        )
-        channel.close()
-        return Response(GroupSubmitSerializer(submit), status.HTTP_201_CREATED)
-
-
-class ScoreboardAPIView(APIView):
-    def get(self, request, phase):
-        try:
-            phase = ChallengePhase.objects.get(pk=phase)
-        except ChallengePhase.DoesNotExist:
-            raise Http404
-        submits = GroupSubmit.objects.filter(phase=phase).values('group').annotate(best_score=Max('score')).order_by(
-            '-best_score'
-        )
-        return Response(GroupSubmitSerializer(submits, many=True), status.HTTP_200_OK)
-
-
 class ScoreSubmitAPIView(APIView):
     authentication_classes = [JudgeSecretAuthentication]
     permission_classes = [IsJudge]
@@ -284,35 +163,3 @@ class ScoreSubmitAPIView(APIView):
         submit.error = request.data.get("error", "")
         submit.save()
         return Response({}, status.HTTP_200_OK)
-
-
-class RejudgeAPIView(APIView):
-    def get(self, request, phase, group):
-        try:
-            phase = ChallengePhase.objects.get(pk=phase)
-            group = ChallengeGroup.objects.get(pk=group)
-        except (ChallengePhase.DoesNotExist, ChallengeGroup.DoesNotExist):
-            raise Http404
-        submits = GroupSubmit.objects.filter(group=group, phase=phase).order_by('-created_at')[:10]
-        credentials = pika.PlainCredentials(settings.RABBITMQ_USERNAME, settings.RABBITMQ_PASSWORD)
-        parameters = pika.ConnectionParameters(settings.RABBITMQ_ENDPOINT, 5672, '/', credentials)
-        connection = pika.BlockingConnection(parameters)
-        channel = connection.channel()
-        channel.exchange_declare('challenge', exchange_type='fanout')
-        channel.queue_declare(queue='submit')
-        channel.queue_bind(exchange='challenge', queue='submit')
-        for submit in submits:
-            channel.basic_publish(
-                exchange='challenge',
-                routing_key='',
-                body=json.dumps(
-                    {
-                        'phase': phase.name,
-                        'tag': phase.tag,
-                        'student_number': submit.user.student_code,
-                        'file_id': submit.id,
-                    }
-                )
-            )
-        channel.close()
-        return Response(GroupSubmitSerializer(submits, many=True), status.HTTP_200_OK)
