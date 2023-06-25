@@ -131,7 +131,7 @@ class CreateGoogleDriveGroupSubmitAPIView(ListCreateAPIView):
             downloaded = services.download_from_drive(tmp_file.name, url=serializer.validated_data["url"])
             if not downloaded:
                 raise BadRequest("Could not download from this link")
-            submit = GroupSubmit.objects.create(
+            submit = GroupSubmit(
                 phase=self.phase,
                 group_id=self.request.user.challenge_user.group_id,
                 score=-1,
