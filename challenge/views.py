@@ -5,6 +5,7 @@ from django.core.exceptions import BadRequest
 from django.db.models import Subquery, OuterRef, DecimalField
 from django.http import Http404
 from rest_framework import status, serializers
+from rest_framework.exceptions import ValidationError
 from rest_framework.generics import ListCreateAPIView, get_object_or_404, ListAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -15,6 +16,22 @@ from challenge.authentication import JudgeSecretAuthentication
 from challenge.models import ChallengePhase, GroupSubmit
 from challenge.permission import IsJudge
 from groups.models import ChallengeGroup, ChallengeUser
+
+
+class ListChallengePhaseAPIView(ListAPIView):
+    class PhaseSerializer(serializers.ModelSerializer):
+        challenge_name = serializers.CharField(source="challenge.name")
+
+        class Meta:
+            model = ChallengePhase
+            fields = [
+                "is_ongoing",
+                "name",
+                "challenge_name",
+            ]
+
+    queryset = ChallengePhase.objects.all()
+    serializer_class = PhaseSerializer
 
 
 class ListCreateGroupSubmitAPIView(ListCreateAPIView):
@@ -54,6 +71,11 @@ class ListCreateGroupSubmitAPIView(ListCreateAPIView):
     def perform_create(self, serializer):
         submit = serializer.save(phase=self.phase, group_id=self.request.user.challenge_user.group_id, score=-1)
         services.send_submit_to_judge(submit)
+
+    def create(self, request, *args, **kwargs):
+        if not self.phase.is_ongoing():
+            raise ValidationError({"phase": "Phase is not ongoing."})
+        return super().create(request, *args, **kwargs)
 
 
 class CreateGoogleDriveGroupSubmitAPIView(ListCreateAPIView):
@@ -96,6 +118,11 @@ class CreateGoogleDriveGroupSubmitAPIView(ListCreateAPIView):
                 submit.file.save("a.zip" if self.phase.challenge.name != "ml" else "a.ipynb", f, save=False)
             submit.save()
         services.send_submit_to_judge(submit)
+
+    def create(self, request, *args, **kwargs):
+        if not self.phase.is_ongoing():
+            raise ValidationError({"phase": "Phase is not ongoing."})
+        return super().create(request, *args, **kwargs)
 
 
 class RankingGroupUserSerializer(serializers.ModelSerializer):

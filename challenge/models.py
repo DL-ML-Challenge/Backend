@@ -2,6 +2,7 @@ import random
 import string
 
 from django.db import models
+from django.utils import timezone
 
 from groups.models import ChallengeGroup
 
@@ -15,6 +16,11 @@ class Challenge(models.Model):
 class ChallengePhase(models.Model):
     name = models.CharField(max_length=50)
     challenge = models.ForeignKey(Challenge, on_delete=models.CASCADE)
+    start = models.DateTimeField()
+    end = models.DateTimeField()
+
+    def is_ongoing(self):
+        return self.start <= timezone.now() <= self.end
 
 
 def random_string(length=8):
